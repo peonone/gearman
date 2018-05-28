@@ -1,0 +1,7 @@
+*.log
+*.swp
+gearmand
+gearmand.dat
+server/unittest.db
+/vendor
+/Gopkg.lock
