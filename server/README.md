@@ -3,7 +3,6 @@ An execuable app which implements a subset of the [gearman protocol](http://gear
 ## Not implemented features
 ### Requests
 - GRAB_JOB_UNIQ
-- SET_CLIENT_ID
 - ALL_YOURS
 - SUBMIT_JOB_SCHED (no plan to add)
 - SUBMIT_JOB_EPOCH (no plan to add)

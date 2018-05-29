@@ -13,6 +13,7 @@ type conn struct {
 	supportFunctions supportFunctions
 	option           *connOption
 	worker           bool
+	clientID         string // the id set by worker side
 }
 
 type connOption struct {
@@ -50,6 +51,19 @@ func (c *conn) isWorker() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.worker
+}
+
+func (c *conn) getClientID() string {
+	c.mu.Lock()
+	c.mu.Unlock()
+
+	return c.clientID
+}
+
+func (c *conn) setClientID(clientID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.clientID = clientID
 }
 
 type mockConn struct {

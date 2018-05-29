@@ -41,6 +41,7 @@ func (s *Server) initHandlerManager() {
 	workStatusHandler := &workStatusHandler{s.jobsManager, s.connManager}
 	sleepHandler := &sleepHandler{s.sleepManager}
 	optionHandler := &optionHandler{}
+	setClientIDHandler := &setClientIDHandler{}
 
 	handlers := []serverMessageHandler{
 		echoHandler,
@@ -50,6 +51,7 @@ func (s *Server) initHandlerManager() {
 		workStatusHandler,
 		sleepHandler,
 		optionHandler,
+		setClientIDHandler,
 	}
 
 	registeredTypes := make(map[gearman.PacketType]serverMessageHandler)
