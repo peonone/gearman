@@ -18,6 +18,7 @@ func (h *canDoHandler) supportPacketTypes() []gearman.PacketType {
 }
 
 func (h *canDoHandler) handle(ctx context.Context, m *gearman.Message, conn *conn) (bool, error) {
+	conn.setIsWorker(true)
 	switch m.PacketType {
 	case gearman.CAN_DO:
 		conn.supportFunctions.canDo(m.Arguments[0], 0)

@@ -14,6 +14,7 @@ func TestCanDoHandler(t *testing.T) {
 	h := &canDoHandler{}
 	conn := newServerConn(gearman.NewMockConn(10, 10))
 
+	assert.False(t, conn.isWorker())
 	assert.Equal(t, 0, len(conn.supportFunctions))
 
 	msg := &gearman.Message{
@@ -25,6 +26,7 @@ func TestCanDoHandler(t *testing.T) {
 	msgRecyclable, err := h.handle(ctx, msg, conn)
 	assert.True(t, msgRecyclable)
 	assert.Nil(t, err)
+	assert.True(t, conn.isWorker())
 	assert.Equal(t, 1, len(conn.supportFunctions))
 	assert.Equal(t, time.Duration(0), conn.supportFunctions.timeout(msg.Arguments[0]))
 	assert.Contains(t, conn.supportFunctions, "echo")
