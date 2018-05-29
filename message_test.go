@@ -72,10 +72,10 @@ func TestDecode(t *testing.T) {
 	encodedBytes, err := msg.Encode()
 	assert.Nil(t, err)
 	reader := bufio.NewReader(bytes.NewReader(encodedBytes))
-	decodedMsg, err := NextMessage(reader)
+	decodedMsg, _, err := NextMessage(reader)
 	assert.Equal(t, msg, decodedMsg)
 	assert.Nil(t, err)
-	decodedMsg, err = NextMessage(reader)
+	decodedMsg, _, err = NextMessage(reader)
 	assert.Nil(t, decodedMsg)
 	assert.Equal(t, io.EOF, err)
 
@@ -83,7 +83,7 @@ func TestDecode(t *testing.T) {
 	msg.MagicType = 32
 	encodedBytes = msg.encodeWithoutValidation()
 	reader = bufio.NewReader(bytes.NewReader(encodedBytes))
-	decodedMsg, err = NextMessage(reader)
+	decodedMsg, _, err = NextMessage(reader)
 	assert.Nil(t, decodedMsg)
 	assert.Equal(t, errInvalidMagic, err)
 
@@ -92,7 +92,7 @@ func TestDecode(t *testing.T) {
 	msg.PacketType = 232
 	encodedBytes = msg.encodeWithoutValidation()
 	reader = bufio.NewReader(bytes.NewReader(encodedBytes))
-	decodedMsg, err = NextMessage(reader)
+	decodedMsg, _, err = NextMessage(reader)
 	assert.Nil(t, decodedMsg)
 	assert.Equal(t, errInvaldPacketType, err)
 }
@@ -142,24 +142,39 @@ func TestContinousRead(t *testing.T) {
 		PacketType: 243,
 		Arguments:  []string{"echo", "111", "hello world"},
 	}
-	encodededMsgs := make([][]byte, 0, 3)
+	encodededMsgs := make([][]byte, 0, 5)
 	// an invalid message first
 	encodededMsgs = append(encodededMsgs, msg.encodeWithoutValidation())
-	msg.PacketType = WORK_COMPLETE
+	// a text message
+	expectedTxtMsg := "status"
+	encodededMsgs = append(encodededMsgs, []byte(expectedTxtMsg+"\n"))
 	// valid one
+	msg.PacketType = WORK_COMPLETE
+	validMsg := *msg
 	encodededMsgs = append(encodededMsgs, msg.encodeWithoutValidation())
+	// another txt msg
+	expectedMsg2 := "maxqueue 10 2 3"
+	encodededMsgs = append(encodededMsgs, []byte(expectedMsg2+"\n"))
 
-	buff := bytes.NewBuffer(bytes.Join(encodededMsgs, nil))
-	decodedMsg, err := NextMessage(buff)
-	assert.Nil(t, decodedMsg)
+	buff := bufio.NewReader(bytes.NewBuffer(bytes.Join(encodededMsgs, nil)))
+	binMsg, txtMsg, err := NextMessage(buff)
+	assert.Nil(t, binMsg)
 	assert.Equal(t, errInvaldPacketType, err)
 
-	// unread data size should equals with the second packet size
-	assert.Equal(t, len(encodededMsgs[1]), len(buff.Bytes()))
-
-	decodedMsg, err = NextMessage(buff)
+	binMsg, txtMsg, err = NextMessage(buff)
+	assert.Nil(t, binMsg)
 	assert.Nil(t, err)
-	assert.Equal(t, msg, decodedMsg)
+	assert.Equal(t, expectedTxtMsg, txtMsg)
+
+	binMsg, txtMsg, err = NextMessage(buff)
+	assert.Equal(t, "", txtMsg)
+	assert.Nil(t, err)
+	assert.Equal(t, validMsg, *binMsg)
+
+	binMsg, txtMsg, err = NextMessage(buff)
+	assert.Nil(t, binMsg)
+	assert.Nil(t, err)
+	assert.Equal(t, expectedMsg2, txtMsg)
 }
 
 type repeatReader struct {
@@ -198,7 +213,7 @@ func BenchmarkDecode(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := NextMessage(reader)
+		_, _, err := NextMessage(reader)
 		if err != nil {
 			b.Fail()
 		}

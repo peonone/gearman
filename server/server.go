@@ -25,6 +25,7 @@ type Server struct {
 	jobsManager        jobsManager
 	connManager        *gearman.ConnManager
 	sleepManager       *sleepManager
+	admin              *admin
 }
 
 func (s *Server) initHandlerManager() {
@@ -102,6 +103,7 @@ func NewServer(cfg *Config) (*Server, error) {
 		jobsManager:        newjobsManager(logger, queue, cfg),
 		connManager:        connManager,
 		sleepManager:       newSleepManager(),
+		admin:              new(admin),
 	}
 	s.initHandlerManager()
 	return s, nil
@@ -142,7 +144,7 @@ func (s *Server) serve(conn *conn) {
 	}
 	s.connManager.AddConn(conn)
 	for {
-		msg, err := conn.ReadMsg()
+		msg, txtMsg, err := conn.ReadMsg()
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			if s.cfg.Verbose {
 				s.logger.Printf("client closed: %s", conn)
@@ -152,19 +154,23 @@ func (s *Server) serve(conn *conn) {
 			s.logger.Printf("read packet failed from %s: %s", conn, err)
 			continue
 		}
-		_, err = s.handlersMng.handleMessage(msg, conn)
-		if err != nil {
-			s.logger.Printf("failed to process message %s for %s: %s", msg, conn, err)
-			if serverErr, ok := err.(*serverError); ok {
-				errMsg := &gearman.Message{
-					MagicType:  gearman.MagicRes,
-					PacketType: gearman.ERROR,
-					Arguments:  serverErr.toArguments(),
+		if msg != nil {
+			_, err = s.handlersMng.handleMessage(msg, conn)
+			if err != nil {
+				s.logger.Printf("failed to process message %s for %s: %s", msg, conn, err)
+				if serverErr, ok := err.(*serverError); ok {
+					errMsg := &gearman.Message{
+						MagicType:  gearman.MagicRes,
+						PacketType: gearman.ERROR,
+						Arguments:  serverErr.toArguments(),
+					}
+					conn.WriteMsg(errMsg)
 				}
-				conn.WriteMsg(errMsg)
+			} else if s.cfg.Verbose {
+				s.logger.Printf("processed message %s for %s", msg, conn)
 			}
-		} else if s.cfg.Verbose {
-			s.logger.Printf("processed message %s for %s", msg, conn)
+		} else if txtMsg != "" {
+			s.admin.handle(txtMsg, conn)
 		}
 	}
 }

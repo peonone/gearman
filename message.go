@@ -1,6 +1,7 @@
 package gearman
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -104,21 +105,45 @@ func (m *Message) WriteTo(writer io.Writer) (int64, error) {
 	return int64(n), err
 }
 
-// NextMessage reads next message from a Reader
-// It reads the massage from reader and decodes it in the gearman official protocol format
-// it returns the message and nil if no any error
-// otherwise return nil and the error occurred
-// it treats error for such cases -
+func firstByte(reader io.Reader) (byte, error) {
+	bufReader, ok := reader.(*bufio.Reader)
+	if ok {
+		return bufReader.ReadByte()
+	}
+	buff := make([]byte, 1)
+	_, err := io.ReadFull(reader, buff)
+	if err != nil {
+		return 0, err
+	}
+	return buff[0], err
+}
+
+// NextMessage reads next message from a bufio.Reader
+// It returns one of binMsg and txtMsg leaving the other as zero value if no any error occured
+// binMsg returned if the next message is binary, and txtMsg if it's text
+// For binary message, it treats error for such cases -
 // 1.read error from the reader
 // 2. invalid magic code / packet type / body size
 // (it will read the full message from the reader in this case, so the next message can be read as expected)
 // It dose not care about the validity of the message, message.Validate() should be called for it
-func NextMessage(reader io.Reader) (*Message, error) {
-	// TODO re-use headers to prevent allocate mem every time
-	headers := make([]byte, headerSize)
-	_, err := io.ReadFull(reader, headers)
+func NextMessage(reader *bufio.Reader) (binMsg *Message, txtMsg string, err error) {
+	beginByte, err := firstByte(reader)
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+	if beginByte != 0 {
+		content, err := reader.ReadString('\n')
+		contentLen := len(content)
+		if contentLen > 0 {
+			content = content[:contentLen-1]
+		}
+		return nil, string([]byte{beginByte}) + content, err
+	}
+	headers := make([]byte, headerSize)
+	headers[0] = beginByte
+	_, err = io.ReadFull(reader, headers[1:])
+	if err != nil {
+		return nil, "", err
 	}
 	var magicType MagicType
 	var magicErr bool
@@ -149,7 +174,7 @@ func NextMessage(reader io.Reader) (*Message, error) {
 			body := make([]byte, bodySize)
 			_, err = io.ReadFull(reader, body)
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 			arguments = strings.Split(string(body), separator)
 		}
@@ -158,18 +183,18 @@ func NextMessage(reader io.Reader) (*Message, error) {
 		// to make sure the next message can be read properly
 		_, err = io.CopyN(ioutil.Discard, reader, int64(bodySize))
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		bodySizeErr = true
 	}
 	if magicErr {
-		return nil, errInvalidMagic
+		return nil, "", errInvalidMagic
 	}
 	if packetTypeErr {
-		return nil, errInvaldPacketType
+		return nil, "", errInvaldPacketType
 	}
 	if bodySizeErr {
-		return nil, errInvalidArgsSize
+		return nil, "", errInvalidArgsSize
 	}
 
 	// TODO re-use Message struct to prevent allocate mem every time
@@ -177,7 +202,7 @@ func NextMessage(reader io.Reader) (*Message, error) {
 		MagicType:  magicType,
 		PacketType: packetType,
 		Arguments:  arguments,
-	}, nil
+	}, "", nil
 }
 
 func (m *Message) String() string {

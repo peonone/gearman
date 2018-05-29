@@ -14,8 +14,9 @@ import (
 // Conn defines the high level interface of a connection
 type Conn interface {
 	fmt.Stringer
-	ReadMsg() (*Message, error)
+	ReadMsg() (*Message, string, error)
 	WriteMsg(*Message) error
+	WriteTxtMsg(string) error
 	WriteBin([]byte) error
 	Close() error
 	ID() *ID
@@ -27,7 +28,7 @@ type NetConn struct {
 	conn    net.Conn
 	id      *ID
 	closed  chan struct{}
-	reader  io.Reader
+	reader  *bufio.Reader
 	logger  *log.Logger
 	verbose bool
 }
@@ -43,13 +44,19 @@ func NewNetConn(conn net.Conn, id *ID) *NetConn {
 }
 
 // ReadMsg reads next Message from the net connection
-func (c *NetConn) ReadMsg() (*Message, error) {
+func (c *NetConn) ReadMsg() (*Message, string, error) {
 	return NextMessage(c.reader)
 }
 
 // WriteMsg writes a Message to the net connection
 func (c *NetConn) WriteMsg(msg *Message) error {
 	_, err := msg.WriteTo(c.conn)
+	return err
+}
+
+// WriteTxtMsg writes a Message to the net connection
+func (c *NetConn) WriteTxtMsg(content string) error {
+	_, err := c.conn.Write([]byte(content))
 	return err
 }
 
@@ -82,33 +89,39 @@ func (c *NetConn) String() string {
 // MockConn is a Conn implementation by channel
 // the main purpose of this is for unit test
 type MockConn struct {
-	ReadCh  chan *Message
-	WriteCh chan *Message
-	Timeout time.Duration
-	ConnID  *ID
-	closed  chan struct{}
+	ReadCh     chan *Message
+	WriteCh    chan *Message
+	ReadTxtCh  chan string
+	WriteTxtCh chan string
+	Timeout    time.Duration
+	ConnID     *ID
+	closed     chan struct{}
 }
 
 // NewMockConn creates a new MockConn
 func NewMockConn(readCache int, writeCache int) *MockConn {
 	return &MockConn{
-		ReadCh:  make(chan *Message, readCache),
-		WriteCh: make(chan *Message, writeCache),
-		ConnID:  NewIDGenerator().Generate(),
-		closed:  make(chan struct{}),
+		ReadCh:     make(chan *Message, readCache),
+		WriteCh:    make(chan *Message, writeCache),
+		ReadTxtCh:  make(chan string, readCache),
+		WriteTxtCh: make(chan string, writeCache),
+		ConnID:     NewIDGenerator().Generate(),
+		closed:     make(chan struct{}),
 	}
 }
 
 // ReadMsg reads next Message from the channel
-func (c *MockConn) ReadMsg() (*Message, error) {
+func (c *MockConn) ReadMsg() (*Message, string, error) {
 	select {
 	case m := <-c.ReadCh:
 		if m == nil {
-			return nil, io.EOF
+			return nil, "", io.EOF
 		}
-		return m, nil
+		return m, "", nil
+	case txt := <-c.ReadTxtCh:
+		return nil, txt, nil
 	case <-time.After(c.Timeout):
-		return nil, errors.New("timeout")
+		return nil, "", errors.New("timeout")
 	}
 }
 
@@ -118,10 +131,16 @@ func (c *MockConn) WriteMsg(m *Message) error {
 	return nil
 }
 
+// WriteTxtMsg writes a text message to the channel
+func (c *MockConn) WriteTxtMsg(content string) error {
+	c.WriteTxtCh <- content
+	return nil
+}
+
 // WriteBin writes an encoded binary message to the channel
 func (c *MockConn) WriteBin(binData []byte) error {
-	buf := bytes.NewReader(binData)
-	msg, err := NextMessage(buf)
+	buf := bufio.NewReader(bytes.NewReader(binData))
+	msg, _, err := NextMessage(buf)
 	if err != nil {
 		return err
 	}
