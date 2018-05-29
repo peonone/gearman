@@ -16,18 +16,20 @@ func TestSleepHandler(t *testing.T) {
 	assert.Equal(t, 0, len(sleepMng.allSleepingConnIDs()))
 	worker1 := gearman.NewMockConn(10, 10)
 	worker2 := gearman.NewMockConn(10, 10)
+	worker1Conn := newServerConn(worker1)
+	worker2Conn := newServerConn(worker2)
 	msg := &gearman.Message{
 		MagicType:  gearman.MagicReq,
 		PacketType: gearman.PRE_SLEEP,
 	}
 	ctx := context.Background()
-	h.Handle(ctx, msg, worker1)
+	h.handle(ctx, msg, worker1Conn)
 	sleepIDs := sleepMng.allSleepingConnIDs()
 	assert.Equal(t, 1, len(sleepIDs))
 	assert.Contains(t, sleepIDs, worker1.ID())
 	assert.NotContains(t, sleepIDs, worker2.ID())
 
-	h.Handle(ctx, msg, worker2)
+	h.handle(ctx, msg, worker2Conn)
 	sleepIDs = sleepMng.allSleepingConnIDs()
 	assert.Equal(t, 2, len(sleepIDs))
 	assert.Contains(t, sleepIDs, worker1.ID())

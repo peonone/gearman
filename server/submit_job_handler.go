@@ -9,12 +9,11 @@ import (
 type submitJobHandler struct {
 	handleGen    *gearman.IDGenerator
 	sleepManager *sleepManager
-	sfManager    *supportFunctionsManager
 	jobsManager  jobsManager
 	connManager  *gearman.ConnManager
 }
 
-func (h *submitJobHandler) SupportPacketTypes() []gearman.PacketType {
+func (h *submitJobHandler) supportPacketTypes() []gearman.PacketType {
 	return []gearman.PacketType{
 		gearman.SUBMIT_JOB,
 		gearman.SUBMIT_JOB_BG,
@@ -27,7 +26,7 @@ func (h *submitJobHandler) SupportPacketTypes() []gearman.PacketType {
 	}
 }
 
-func (h *submitJobHandler) Handle(ctx context.Context, m *gearman.Message, conn gearman.Conn) (bool, error) {
+func (h *submitJobHandler) handle(ctx context.Context, m *gearman.Message, con *conn) (bool, error) {
 	var bg jobBackgroud
 	var priority priority
 
@@ -54,9 +53,9 @@ func (h *submitJobHandler) Handle(ctx context.Context, m *gearman.Message, conn 
 		uniqueID: m.Arguments[1],
 		priority: priority,
 	}
-	var listenConn gearman.Conn
+	var listenConn *conn
 	if bg == nonBackgroud {
-		listenConn = conn
+		listenConn = con
 	}
 	if m.PacketType == gearman.SUBMIT_REDUCE_JOB || m.PacketType == gearman.SUBMIT_REDUCE_JOB_BACKGROUND {
 		j.reducer = m.Arguments[2]
@@ -73,8 +72,8 @@ func (h *submitJobHandler) Handle(ctx context.Context, m *gearman.Message, conn 
 		if workerConn == nil {
 			continue
 		}
-		funcs := h.sfManager.supportFunctions(sleepID)
-		if funcs.support(j.function) {
+		workerConnSrv := workerConn.(*conn)
+		if workerConnSrv.supportFunctions.support(j.function) {
 			msg := &gearman.Message{
 				MagicType:  gearman.MagicRes,
 				PacketType: gearman.NOOP,
@@ -89,5 +88,5 @@ func (h *submitJobHandler) Handle(ctx context.Context, m *gearman.Message, conn 
 		PacketType: gearman.JOB_CREATED,
 		Arguments:  []string{jobH.String()},
 	}
-	return true, conn.WriteMsg(respMsg)
+	return true, con.WriteMsg(respMsg)
 }

@@ -12,16 +12,16 @@ const exceptionsOption = "exceptions"
 type optionHandler struct {
 }
 
-func (h *optionHandler) SupportPacketTypes() []gearman.PacketType {
+func (h *optionHandler) supportPacketTypes() []gearman.PacketType {
 	return []gearman.PacketType{
 		gearman.OPTION_REQ,
 	}
 }
 
-func (h *optionHandler) Handle(ctx context.Context, m *gearman.Message, conn gearman.Conn) (bool, error) {
+func (h *optionHandler) handle(ctx context.Context, m *gearman.Message, conn *conn) (bool, error) {
 	optionsSet := ""
 	if strings.Contains(m.Arguments[0], exceptionsOption) {
-		conn.Option().SetForwardException(true)
+		conn.setForwardException(true)
 		optionsSet = exceptionsOption
 	}
 	msg := &gearman.Message{

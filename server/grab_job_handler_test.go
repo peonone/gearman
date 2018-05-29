@@ -13,26 +13,25 @@ import (
 
 func TestGrabJobHandler(t *testing.T) {
 	jobsManager := new(mockJobsManager)
-	sfManager := newSupportFunctionsManager()
 
-	h := &grabJobHandler{sfManager, jobsManager}
+	h := &grabJobHandler{jobsManager}
 
 	workerConn := gearman.NewMockConn(10, 10)
-
+	workerSrvConn := newServerConn(workerConn)
 	ctx := context.Background()
 
 	msg := &gearman.Message{
 		MagicType:  gearman.MagicReq,
 		PacketType: gearman.GRAB_JOB,
 	}
-	msgRecyclable, err := h.Handle(ctx, msg, workerConn)
+	msgRecyclable, err := h.handle(ctx, msg, workerSrvConn)
 	assert.True(t, msgRecyclable)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(workerConn.WriteCh))
 	assert.Equal(t, noJobMsg, <-workerConn.WriteCh)
 
-	sfManager.canDo(workerConn.ID(), "echo", 0)
-	sfManager.canDo(workerConn.ID(), "wc", time.Second)
+	workerSrvConn.supportFunctions.canDo("echo", 0)
+	workerSrvConn.supportFunctions.canDo("wc", time.Second)
 	j := &job{
 		function: "echo",
 		data:     "data",
@@ -40,18 +39,18 @@ func TestGrabJobHandler(t *testing.T) {
 		uniqueID: "12345",
 		reducer:  "reduce1",
 	}
-	for _, packet := range h.SupportPacketTypes() {
+	for _, packet := range h.supportPacketTypes() {
 		msg := &gearman.Message{
 			MagicType:  gearman.MagicReq,
 			PacketType: packet,
 		}
-		jobsManager.On("grabJob", ctx, sfManager.supportFunctions(workerConn.ID())).Return(nil, nil).Once()
-		msgRecyclable, err = h.Handle(ctx, msg, workerConn)
+		jobsManager.On("grabJob", ctx, workerSrvConn.supportFunctions).Return(nil, nil).Once()
+		msgRecyclable, err = h.handle(ctx, msg, workerSrvConn)
 		assert.Equal(t, 1, len(workerConn.WriteCh))
 		assert.Equal(t, noJobMsg, <-workerConn.WriteCh)
 
-		jobsManager.On("grabJob", ctx, sfManager.supportFunctions(workerConn.ID())).Return(j, nil).Once()
-		msgRecyclable, err = h.Handle(ctx, msg, workerConn)
+		jobsManager.On("grabJob", ctx, workerSrvConn.supportFunctions).Return(j, nil).Once()
+		msgRecyclable, err = h.handle(ctx, msg, workerSrvConn)
 		assert.True(t, msgRecyclable)
 		assert.Nil(t, err)
 		assert.Equal(t, 1, len(workerConn.WriteCh))
@@ -73,7 +72,7 @@ func TestGrabJobHandler(t *testing.T) {
 		}
 	}
 
-	jobsManager.On("grabJob", ctx, sfManager.supportFunctions(workerConn.ID())).Return(nil, errors.New("internal error")).Once()
-	msgRecyclable, err = h.Handle(ctx, msg, workerConn)
+	jobsManager.On("grabJob", ctx, workerSrvConn.supportFunctions).Return(nil, errors.New("internal error")).Once()
+	msgRecyclable, err = h.handle(ctx, msg, workerSrvConn)
 	assert.NotNil(t, err)
 }

@@ -36,8 +36,8 @@ func loadPendingJob(manager *srvJobsManager, handle *gearman.ID) *pendingJob {
 	return manager.pendingJobs[*handle]
 }
 
-func getPJobConns(pJob *pendingJob) map[gearman.ID]gearman.Conn {
-	ch := make(chan map[gearman.ID]gearman.Conn)
+func getPJobConns(pJob *pendingJob) map[gearman.ID]*conn {
+	ch := make(chan map[gearman.ID]*conn)
 	pJob.connectionsQueryChan <- ch
 	return <-ch
 }
@@ -45,7 +45,7 @@ func getPJobConns(pJob *pendingJob) map[gearman.ID]gearman.Conn {
 func TestSubmitJob(t *testing.T) {
 	manager, q := makeJobsManagerForTest()
 	ctx := context.Background()
-	client1 := gearman.NewMockConn(10, 10)
+	client1 := newMockSConn(10, 10)
 	j := &job{
 		function: "echo",
 		handle:   testIdGen.Generate(),
@@ -53,7 +53,7 @@ func TestSubmitJob(t *testing.T) {
 		priority: priorityHigh,
 	}
 	q.On("enqueue", ctx, j).Return(nil).Once()
-	manager.submitJob(ctx, j, client1)
+	manager.submitJob(ctx, j, client1.srvConn)
 	job1Conns := loadPendingJob(manager, j.handle).clientConns
 	assert.Equal(t, 1, len(job1Conns))
 	assert.Contains(t, job1Conns, *client1.ID())
@@ -72,9 +72,9 @@ func TestSubmitJob(t *testing.T) {
 func TestSubmitJobCoalescingNotdispatched(t *testing.T) {
 	manager, q := makeJobsManagerForTest()
 	ctx := context.Background()
-	client1 := gearman.NewMockConn(10, 10)
-	client2 := gearman.NewMockConn(10, 10)
-	client3 := gearman.NewMockConn(10, 10)
+	client1 := newMockSConn(10, 10)
+	client2 := newMockSConn(10, 10)
+	client3 := newMockSConn(10, 10)
 	j1 := &job{
 		function: "echo",
 		handle:   testIdGen.Generate(),
@@ -104,13 +104,13 @@ func TestSubmitJobCoalescingNotdispatched(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	for i, pair := range []struct {
 		j      *job
-		client gearman.Conn
-	}{{j1, client1}, {j2, client2}, {j3, client3}} {
+		client *conn
+	}{{j1, client1.srvConn}, {j2, client2.srvConn}, {j3, client3.srvConn}} {
 		if i == 0 {
 			manager.submitJob(ctx, pair.j, pair.client)
 		} else {
 			wg.Add(1)
-			go func(i int, j *job, client gearman.Conn) {
+			go func(i int, j *job, client *conn) {
 				handle, err := manager.submitJob(ctx, j, client)
 				assert.Nil(t, err)
 				if i == 1 {
@@ -138,9 +138,10 @@ func TestSubmitJobCoalescingNotdispatched(t *testing.T) {
 func TestSubmitJobCoalescingdispatched(t *testing.T) {
 	manager, q := makeJobsManagerForTest()
 	ctx := context.Background()
-	client1 := gearman.NewMockConn(10, 10)
-	client2 := gearman.NewMockConn(10, 10)
-	client3 := gearman.NewMockConn(10, 10)
+	client1 := newMockSConn(10, 10)
+	client2 := newMockSConn(10, 10)
+	client3 := newMockSConn(10, 10)
+
 	j1 := &job{
 		function: "echo",
 		handle:   testIdGen.Generate(),
@@ -161,7 +162,7 @@ func TestSubmitJobCoalescingdispatched(t *testing.T) {
 	}
 
 	q.On("enqueue", ctx, j1).Return(nil).Once()
-	manager.submitJob(ctx, j1, client1)
+	manager.submitJob(ctx, j1, client1.srvConn)
 	functions := make(map[string]time.Duration)
 	functions["echo"] = time.Second * 5
 	q.On("dequeue", mock.Anything, mock.Anything).Return(j1, nil).Once()
@@ -169,18 +170,19 @@ func TestSubmitJobCoalescingdispatched(t *testing.T) {
 	assert.Equal(t, j1, grabedJob)
 	assert.Nil(t, err)
 
-	j2Handle, err := manager.submitJob(ctx, j2, client2)
+	j2Handle, err := manager.submitJob(ctx, j2, client2.srvConn)
 	assert.Equal(t, j1.handle, j2Handle)
 	q.On("enqueue", ctx, j3).Return(nil).Once()
-	manager.submitJob(ctx, j3, client3)
+	manager.submitJob(ctx, j3, client3.srvConn)
 	q.AssertExpectations(t)
 }
 
 func TestGrabJob(t *testing.T) {
 	manager, q := makeJobsManagerForTest()
 	ctx := context.Background()
-	client1 := gearman.NewMockConn(10, 10)
-	client2 := gearman.NewMockConn(10, 10)
+	client1 := newMockSConn(10, 10)
+	client2 := newMockSConn(10, 10)
+
 	j := &job{
 		function: "echo",
 		handle:   testIdGen.Generate(),
@@ -190,10 +192,10 @@ func TestGrabJob(t *testing.T) {
 	pJob := &pendingJob{
 		handle:      j.handle,
 		uniqueID:    j.uniqueID,
-		clientConns: make(map[gearman.ID]gearman.Conn),
+		clientConns: make(map[gearman.ID]*conn),
 	}
-	pJob.clientConns[*client1.ID()] = client1
-	pJob.clientConns[*client2.ID()] = client2
+	pJob.clientConns[*client1.ID()] = client1.srvConn
+	pJob.clientConns[*client2.ID()] = client2.srvConn
 	addPendingJob(manager, pJob)
 
 	functions := make(map[string]time.Duration)
@@ -228,9 +230,9 @@ func TestGrabJob(t *testing.T) {
 func TestJobClientClosed(t *testing.T) {
 	manager, q := makeJobsManagerForTest()
 	ctx := context.Background()
-	client1 := gearman.NewMockConn(10, 10)
-	client2 := gearman.NewMockConn(10, 10)
-	client3 := gearman.NewMockConn(10, 10)
+	client1 := newMockSConn(10, 10)
+	client2 := newMockSConn(10, 10)
+	client3 := newMockSConn(10, 10)
 	j := &job{
 		function: "echo",
 		handle:   testIdGen.Generate(),
@@ -241,11 +243,11 @@ func TestJobClientClosed(t *testing.T) {
 	pJob := &pendingJob{
 		handle:      j.handle,
 		uniqueID:    j.uniqueID,
-		clientConns: make(map[gearman.ID]gearman.Conn),
+		clientConns: make(map[gearman.ID]*conn),
 	}
-	pJob.clientConns[*client1.ID()] = client1
-	pJob.clientConns[*client2.ID()] = client2
-	pJob.clientConns[*client3.ID()] = client3
+	pJob.clientConns[*client1.ID()] = client1.srvConn
+	pJob.clientConns[*client2.ID()] = client2.srvConn
+	pJob.clientConns[*client3.ID()] = client3.srvConn
 	addPendingJob(manager, pJob)
 
 	functions := make(map[string]time.Duration)
@@ -275,7 +277,7 @@ func TestJobClientClosed(t *testing.T) {
 func TestJobTimeout(t *testing.T) {
 	manager, q := makeJobsManagerForTest()
 	ctx := context.Background()
-	client1 := gearman.NewMockConn(10, 10)
+	client1 := newMockSConn(10, 10)
 	job1 := &job{
 		function: "echo",
 		handle:   testIdGen.Generate(),
@@ -292,16 +294,16 @@ func TestJobTimeout(t *testing.T) {
 	pJob1 := &pendingJob{
 		handle:      job1.handle,
 		uniqueID:    job1.uniqueID,
-		clientConns: make(map[gearman.ID]gearman.Conn),
+		clientConns: make(map[gearman.ID]*conn),
 	}
-	pJob1.clientConns[*client1.ID()] = client1
+	pJob1.clientConns[*client1.ID()] = client1.srvConn
 	addPendingJob(manager, pJob1)
 	pJob2 := &pendingJob{
 		handle:      job2.handle,
 		uniqueID:    job2.uniqueID,
-		clientConns: make(map[gearman.ID]gearman.Conn),
+		clientConns: make(map[gearman.ID]*conn),
 	}
-	pJob2.clientConns[*client1.ID()] = client1
+	pJob2.clientConns[*client1.ID()] = client1.srvConn
 	addPendingJob(manager, pJob2)
 
 	functions := supportFunctions(make(map[string]time.Duration))
@@ -354,9 +356,9 @@ func TestJobStatus(t *testing.T) {
 	assert.False(t, js.known)
 	assert.False(t, js.running)
 
-	client1 := gearman.NewMockConn(10, 10)
-	client2 := gearman.NewMockConn(10, 10)
-	client3 := gearman.NewMockConn(10, 10)
+	client1 := newMockSConn(10, 10)
+	client2 := newMockSConn(10, 10)
+	client3 := newMockSConn(10, 10)
 	j := &job{
 		function: "echo",
 		handle:   testIdGen.Generate(),
@@ -367,11 +369,11 @@ func TestJobStatus(t *testing.T) {
 	pJob := &pendingJob{
 		handle:      j.handle,
 		uniqueID:    j.uniqueID,
-		clientConns: make(map[gearman.ID]gearman.Conn),
+		clientConns: make(map[gearman.ID]*conn),
 	}
-	pJob.clientConns[*client1.ID()] = client1
-	pJob.clientConns[*client2.ID()] = client2
-	pJob.clientConns[*client3.ID()] = client3
+	pJob.clientConns[*client1.ID()] = client1.srvConn
+	pJob.clientConns[*client2.ID()] = client2.srvConn
+	pJob.clientConns[*client3.ID()] = client3.srvConn
 	addPendingJob(manager, pJob)
 	js = manager.getJobStatus(ctx, j.handle, "")
 	assert.Equal(t, pJob.handle, js.handle)
@@ -447,9 +449,9 @@ func TestJobDone(t *testing.T) {
 	ctx := context.Background()
 	for i, packet := range []gearman.PacketType{gearman.WORK_COMPLETE, gearman.WORK_FAIL, gearman.WORK_EXCEPTION} {
 		manager, q := makeJobsManagerForTest()
-		client1 := gearman.NewMockConn(10, 10)
-		client1.Option().SetForwardException(true)
-		client2 := gearman.NewMockConn(10, 10)
+		client1 := newMockSConn(10, 10)
+		client1.srvConn.setForwardException(true)
+		client2 := newMockSConn(10, 10)
 		j := &job{
 			function: "echo",
 			handle:   testIdGen.Generate(),
@@ -460,10 +462,10 @@ func TestJobDone(t *testing.T) {
 		pJob := &pendingJob{
 			handle:      j.handle,
 			uniqueID:    j.uniqueID,
-			clientConns: make(map[gearman.ID]gearman.Conn),
+			clientConns: make(map[gearman.ID]*conn),
 		}
-		pJob.clientConns[*client1.ID()] = client1
-		pJob.clientConns[*client2.ID()] = client2
+		pJob.clientConns[*client1.ID()] = client1.srvConn
+		pJob.clientConns[*client2.ID()] = client2.srvConn
 		addPendingJob(manager, pJob)
 		functions := make(map[string]time.Duration)
 		functions["echo"] = 0

@@ -34,12 +34,11 @@ var submitTestDatas = []*submitTestData{
 }
 
 func TestSubmitJobHandler(t *testing.T) {
-	conn := gearman.NewMockConn(10, 10)
+	client := newMockSConn(10, 10)
 	sleepManager := newSleepManager()
-	sfManager := newSupportFunctionsManager()
 	jobsManager := new(mockJobsManager)
 	connManager := gearman.NewConnManager()
-	handler := &submitJobHandler{testIdGen, sleepManager, sfManager, jobsManager, connManager}
+	handler := &submitJobHandler{testIdGen, sleepManager, jobsManager, connManager}
 	ctx := context.Background()
 	for i, testData := range submitTestDatas {
 		submitMsg := &gearman.Message{
@@ -50,11 +49,11 @@ func TestSubmitJobHandler(t *testing.T) {
 
 		var priority priority
 
-		var listenConn gearman.Conn
+		var listenConn *conn
 		switch testData.packet {
 		case gearman.SUBMIT_JOB_BG, gearman.SUBMIT_JOB_HIGH_BG, gearman.SUBMIT_JOB_LOW_BG, gearman.SUBMIT_REDUCE_JOB_BACKGROUND:
 		default:
-			listenConn = conn
+			listenConn = client.srvConn
 		}
 
 		switch testData.packet {
@@ -71,7 +70,7 @@ func TestSubmitJobHandler(t *testing.T) {
 		}
 
 		jobsManager.On("submitJob", ctx, mock.Anything, listenConn).Return("in-param", nil)
-		msgRecyclable, err := handler.Handle(ctx, submitMsg, conn)
+		msgRecyclable, err := handler.handle(ctx, submitMsg, client.srvConn)
 		assert.True(t, msgRecyclable)
 		assert.Nil(t, err)
 		j := jobsManager.Calls[i].Arguments[1].(*job)
@@ -79,8 +78,8 @@ func TestSubmitJobHandler(t *testing.T) {
 		assert.Equal(t, testData.args[1], j.uniqueID)
 		assert.Equal(t, priority, j.priority)
 
-		assert.Equal(t, 1, len(conn.WriteCh))
-		sentClientMsg := <-conn.WriteCh
+		assert.Equal(t, 1, len(client.WriteCh))
+		sentClientMsg := <-client.WriteCh
 		assert.Equal(t, gearman.MagicRes, sentClientMsg.MagicType)
 		assert.Equal(t, gearman.JOB_CREATED, sentClientMsg.PacketType)
 		assert.Equal(t, j.handle.String(), sentClientMsg.Arguments[0])
@@ -91,17 +90,16 @@ func TestSubmitJobHandler(t *testing.T) {
 }
 
 func TestSubmitJobHandlerNoopSleep(t *testing.T) {
-	conn := gearman.NewMockConn(10, 10)
+	client := newMockSConn(10, 10)
 	sleepManager := newSleepManager()
-	sfManager := newSupportFunctionsManager()
 	jobsManager := new(mockJobsManager)
 	connManager := gearman.NewConnManager()
 
-	handler := &submitJobHandler{testIdGen, sleepManager, sfManager, jobsManager, connManager}
-	worker := gearman.NewMockConn(10, 10)
-	connManager.AddConn(worker)
+	handler := &submitJobHandler{testIdGen, sleepManager, jobsManager, connManager}
+	worker := newMockSConn(10, 10)
+	connManager.AddConn(worker.srvConn)
 	sleepManager.addSleepWorker(worker.ID())
-	sfManager.canDo(worker.ID(), "echo1", 0)
+	worker.srvConn.supportFunctions.canDo("echo1", 0)
 	ctx := context.Background()
 	m := &gearman.Message{
 		MagicType:  gearman.MagicReq,
@@ -109,11 +107,11 @@ func TestSubmitJobHandlerNoopSleep(t *testing.T) {
 		Arguments:  []string{"echo", "123456", "hello world"},
 	}
 	jobsManager.On("submitJob", ctx, mock.Anything, mock.Anything).Return("in-param", nil).Once()
-	handler.Handle(ctx, m, conn)
+	handler.handle(ctx, m, client.srvConn)
 	assert.Equal(t, 0, len(worker.WriteCh))
-	sfManager.canDo(worker.ID(), "echo", 0)
+	worker.srvConn.supportFunctions.canDo("echo", 0)
 	jobsManager.On("submitJob", ctx, mock.Anything, mock.Anything).Return("in-param", nil).Once()
-	handler.Handle(ctx, m, conn)
+	handler.handle(ctx, m, client.srvConn)
 	assert.Equal(t, 1, len(worker.WriteCh))
 	msg := <-worker.WriteCh
 	assert.Equal(t, gearman.MagicRes, msg.MagicType)

@@ -16,22 +16,21 @@ func TestServe(t *testing.T) {
 	logger := log.New(os.Stderr, "", log.LstdFlags|log.Ltime)
 	q := &mockQueue{}
 	s := &Server{
-		cfg:                     cfg,
-		logger:                  logger,
-		logf:                    nil,
-		queue:                   q,
-		jobHandleGenerator:      testIdGen,
-		clientIDGenerator:       testIdGen,
-		supportFunctionsManager: newSupportFunctionsManager(),
-		handlersMng:             gearman.NewHandlerManager(gearman.RoleServer, 0),
-		connManager:             gearman.NewConnManager(),
+		cfg:                cfg,
+		logger:             logger,
+		logf:               nil,
+		queue:              q,
+		jobHandleGenerator: testIdGen,
+		clientIDGenerator:  testIdGen,
+		handlersMng:        newServerHandlerManager(0),
+		connManager:        gearman.NewConnManager(),
 	}
-	submitHandler := &gearman.MockHandler{}
-	echoHandler := &gearman.MockHandler{}
+	submitHandler := &MockHandler{}
+	echoHandler := &MockHandler{}
 
-	s.handlersMng.RegisterHandler(gearman.SUBMIT_JOB, submitHandler)
-	s.handlersMng.RegisterHandler(gearman.ECHO_REQ, echoHandler)
-	conn := gearman.NewMockConn(5, 5)
+	s.handlersMng.registerHandler(gearman.SUBMIT_JOB, submitHandler)
+	s.handlersMng.registerHandler(gearman.ECHO_REQ, echoHandler)
+	conn := newMockSConn(10, 10)
 
 	echoMsg := &gearman.Message{
 		MagicType:  gearman.MagicReq,
@@ -39,7 +38,7 @@ func TestServe(t *testing.T) {
 		Arguments:  []string{"hello world"},
 	}
 	conn.ReadCh <- echoMsg
-	echoHandler.On("Handle", mock.Anything, echoMsg, conn).Return(true, nil).Once()
+	echoHandler.On("handle", mock.Anything, echoMsg, conn.srvConn).Return(true, nil).Once()
 
 	submitMsg := &gearman.Message{
 		MagicType:  gearman.MagicReq,
@@ -47,7 +46,7 @@ func TestServe(t *testing.T) {
 		Arguments:  []string{"echo", "123", "hihi"},
 	}
 	conn.ReadCh <- submitMsg
-	submitHandler.On("Handle", mock.Anything, submitMsg, conn).Return(true, errors.New("err")).Once()
+	submitHandler.On("handle", mock.Anything, submitMsg, conn.srvConn).Return(true, errors.New("err")).Once()
 
 	submitMsg2 := &gearman.Message{
 		MagicType:  gearman.MagicReq,
@@ -59,9 +58,9 @@ func TestServe(t *testing.T) {
 		code: "0001",
 		err:  errors.New("first error"),
 	}
-	submitHandler.On("Handle", mock.Anything, submitMsg2, conn).Return(true, serverErr).Once()
+	submitHandler.On("handle", mock.Anything, submitMsg2, conn.srvConn).Return(true, serverErr).Once()
 	close(conn.ReadCh)
-	s.serve(conn)
+	s.serve(conn.srvConn)
 
 	assert.Equal(t, 1, len(conn.WriteCh))
 	sentMsg := <-conn.WriteCh

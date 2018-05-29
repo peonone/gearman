@@ -9,13 +9,13 @@ import (
 type echoHandler struct {
 }
 
-func (h *echoHandler) SupportPacketTypes() []gearman.PacketType {
+func (h *echoHandler) supportPacketTypes() []gearman.PacketType {
 	return []gearman.PacketType{
 		gearman.ECHO_REQ,
 	}
 }
 
-func (h *echoHandler) Handle(ctx context.Context, m *gearman.Message, conn gearman.Conn) (bool, error) {
+func (h *echoHandler) handle(ctx context.Context, m *gearman.Message, conn *conn) (bool, error) {
 	msg := &gearman.Message{
 		MagicType:  gearman.MagicRes,
 		PacketType: gearman.ECHO_RES,

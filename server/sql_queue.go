@@ -74,7 +74,7 @@ func (q *sqlQueue) dequeue(ctx context.Context, functions []string) (j *job, err
 		return nil, err
 	}
 	if j != nil {
-		err = q.dialect.deleteByHandle(ctx, j.handle.String())
+		err = q.dialect.deleteByhandle(ctx, j.handle.String())
 		if err != nil {
 			return nil, err
 		}

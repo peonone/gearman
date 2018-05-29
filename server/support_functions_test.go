@@ -5,36 +5,31 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/peonone/gearman"
 )
 
 func TestSupportFunctions(t *testing.T) {
-	manager := newSupportFunctionsManager()
-	worker1 := gearman.NewMockConn(10, 10)
-	worker2 := gearman.NewMockConn(10, 10)
-	assert.Equal(t, 0, len(manager.supportFunctions(worker1.ID())))
+	worker1 := newMockSConn(10, 10)
+	worker2 := newMockSConn(10, 10)
+	assert.Equal(t, 0, len(worker1.srvConn.supportFunctions))
 
-	manager.canDo(worker1.ID(), "echo", 0)
-	manager.canDo(worker1.ID(), "wc", time.Second)
+	worker1.srvConn.supportFunctions.canDo("echo", 0)
+	worker1.srvConn.supportFunctions.canDo("wc", time.Second)
 
-	manager.canDo(worker2.ID(), "echo", time.Millisecond*50)
+	worker2.srvConn.supportFunctions.canDo("echo", time.Millisecond*50)
 
-	worker1Funcs := manager.supportFunctions(worker1.ID())
-	assert.Equal(t, 2, len(worker1Funcs))
-	assert.Contains(t, worker1Funcs, "echo")
-	assert.Contains(t, worker1Funcs, "wc")
+	assert.Equal(t, 2, len(worker1.srvConn.supportFunctions))
+	assert.Contains(t, worker1.srvConn.supportFunctions, "echo")
+	assert.Contains(t, worker1.srvConn.supportFunctions, "wc")
 
-	assert.Equal(t, time.Duration(0), worker1Funcs.timeout("echo"))
-	assert.Equal(t, time.Second, worker1Funcs.timeout("wc"))
+	assert.Equal(t, time.Duration(0), worker1.srvConn.supportFunctions.timeout("echo"))
+	assert.Equal(t, time.Second, worker1.srvConn.supportFunctions.timeout("wc"))
 
-	worker2Funcs := manager.supportFunctions(worker2.ID())
-	assert.Equal(t, 1, len(worker2Funcs))
-	assert.Contains(t, worker2Funcs, "echo")
+	assert.Equal(t, 1, len(worker2.srvConn.supportFunctions))
+	assert.Contains(t, worker2.srvConn.supportFunctions, "echo")
 
-	assert.Equal(t, time.Millisecond*50, worker2Funcs.timeout("echo"))
+	assert.Equal(t, time.Millisecond*50, worker2.srvConn.supportFunctions.timeout("echo"))
 
-	manager.reset(worker1.ID())
-	assert.Equal(t, 0, len(manager.supportFunctions(worker1.ID())))
-	assert.NotEqual(t, 0, len(manager.supportFunctions(worker2.ID())))
+	worker1.srvConn.supportFunctions.reset()
+	assert.Equal(t, 0, len(worker1.srvConn.supportFunctions))
+	assert.NotEqual(t, 0, len(worker2.srvConn.supportFunctions))
 }

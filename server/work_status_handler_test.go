@@ -12,7 +12,7 @@ import (
 func TestWorkStatusHandler(t *testing.T) {
 	jobsManager := new(mockJobsManager)
 	connManager := gearman.NewConnManager()
-	worker := gearman.NewMockConn(10, 10)
+	worker := newMockSConn(10, 10)
 	h := &workStatusHandler{jobsManager, connManager}
 
 	handle := testIdGen.Generate()
@@ -24,7 +24,7 @@ func TestWorkStatusHandler(t *testing.T) {
 
 	ctx := context.Background()
 	jobsManager.On("updateJobStatus", ctx, handle, msg).Return(true).Once()
-	msgRecyclable, err := h.Handle(ctx, msg, worker)
+	msgRecyclable, err := h.handle(ctx, msg, worker.srvConn)
 	assert.False(t, msgRecyclable)
 	assert.Nil(t, err)
 	jobsManager.AssertExpectations(t)

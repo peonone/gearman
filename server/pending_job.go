@@ -29,7 +29,7 @@ const (
 )
 
 type newConnReq struct {
-	conn  gearman.Conn
+	conn  *conn
 	reply chan bool
 }
 
@@ -42,11 +42,11 @@ type pendingJob struct {
 	newConnChan          chan *newConnReq
 	statusUpdateChan     chan *statusUpdateReq
 	statusQueryChan      chan chan *jobStatus
-	connectionsQueryChan chan chan map[gearman.ID]gearman.Conn
+	connectionsQueryChan chan chan map[gearman.ID]*conn
 	done                 chan struct{}
 	handle               *gearman.ID
 	uniqueID             string
-	clientConns          map[gearman.ID]gearman.Conn
+	clientConns          map[gearman.ID]*conn
 	prgNumerator         int
 	prgDenominator       int
 	timeouted            bool
@@ -89,7 +89,7 @@ func (j *pendingJob) handleStatusUpdate(req *statusUpdateReq) bool {
 		var err error
 
 		for _, conn := range j.clientConns {
-			if conn.Option().ForwardException() {
+			if conn.forwardException() {
 				if excBin == nil {
 					excBin, err = req.msg.Encode()
 					if err != nil {
@@ -98,7 +98,6 @@ func (j *pendingJob) handleStatusUpdate(req *statusUpdateReq) bool {
 					}
 				}
 				msgBin = excBin
-
 			} else {
 				if failBin == nil {
 					failMsg := &gearman.Message{
@@ -234,8 +233,8 @@ LOOP:
 				waitingCount: len(j.clientConns),
 			}
 		case selectIdxGetConnections:
-			replyCh := value.Interface().(chan map[gearman.ID]gearman.Conn)
-			connsCopy := make(map[gearman.ID]gearman.Conn)
+			replyCh := value.Interface().(chan map[gearman.ID]*conn)
+			connsCopy := make(map[gearman.ID]*conn)
 
 			for k, v := range j.clientConns {
 				connsCopy[k] = v
@@ -248,7 +247,7 @@ LOOP:
 	}
 }
 
-func (j *pendingJob) registerNewConn(ctx context.Context, clientConn gearman.Conn) (bool, error) {
+func (j *pendingJob) registerNewConn(ctx context.Context, clientConn *conn) (bool, error) {
 	replyCh := make(chan bool)
 	select {
 	case <-j.done:

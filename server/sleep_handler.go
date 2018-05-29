@@ -10,13 +10,13 @@ type sleepHandler struct {
 	sleepManager *sleepManager
 }
 
-func (h *sleepHandler) SupportPacketTypes() []gearman.PacketType {
+func (h *sleepHandler) supportPacketTypes() []gearman.PacketType {
 	return []gearman.PacketType{
 		gearman.PRE_SLEEP,
 	}
 }
 
-func (h *sleepHandler) Handle(ctx context.Context, m *gearman.Message, conn gearman.Conn) (bool, error) {
+func (h *sleepHandler) handle(ctx context.Context, m *gearman.Message, conn *conn) (bool, error) {
 	h.sleepManager.addSleepWorker(conn.ID())
 	return true, nil
 }

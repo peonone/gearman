@@ -55,7 +55,7 @@ type sqlQueueDialiect interface {
 	insertItem(ctx context.Context, j *job) error
 	peekJob(ctx context.Context, functions []string) (*job, error)
 	querySize(ctx context.Context) (int, error)
-	deleteByHandle(ctx context.Context, handle string) error
+	deleteByhandle(ctx context.Context, handle string) error
 }
 
 type sqlQueueDialectParam struct {
@@ -183,7 +183,7 @@ func (ds *sqlQueueDialiectSimple) querySize(ctx context.Context) (size int, err 
 	return
 }
 
-func (ds *sqlQueueDialiectSimple) deleteByHandle(ctx context.Context, handle string) (err error) {
+func (ds *sqlQueueDialiectSimple) deleteByhandle(ctx context.Context, handle string) (err error) {
 	query := fmt.Sprintf(queueDeleteTmpl, ds.param.table)
 	tx, err := ds.param.db.BeginTx(ctx, nil)
 	if err != nil {

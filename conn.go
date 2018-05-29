@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"sync"
 	"time"
 )
 
@@ -21,7 +20,6 @@ type Conn interface {
 	Close() error
 	ID() *ID
 	Closed() <-chan struct{}
-	Option() *ConnOption
 }
 
 // NetConn is a Conn implementation of the net connection
@@ -32,27 +30,6 @@ type NetConn struct {
 	reader  io.Reader
 	logger  *log.Logger
 	verbose bool
-	option  *ConnOption
-}
-
-// ConnOption is the option for a connection
-type ConnOption struct {
-	mu               sync.Mutex
-	forwardException bool
-}
-
-// SetForwardException sets the forward exception flag
-func (o *ConnOption) SetForwardException(forwardException bool) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.forwardException = forwardException
-}
-
-// ForwardException returns the forward exception flag
-func (o *ConnOption) ForwardException() bool {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	return o.forwardException
 }
 
 // NewNetConn creates a NetConn
@@ -62,7 +39,6 @@ func NewNetConn(conn net.Conn, id *ID) *NetConn {
 		id:     id,
 		closed: make(chan struct{}),
 		reader: bufio.NewReader(conn),
-		option: new(ConnOption),
 	}
 }
 
@@ -99,11 +75,6 @@ func (c *NetConn) ID() *ID {
 	return c.id
 }
 
-// Option returns the connection option
-func (c *NetConn) Option() *ConnOption {
-	return c.option
-}
-
 func (c *NetConn) String() string {
 	return fmt.Sprintf("%s(%s)", c.conn.RemoteAddr(), c.id)
 }
@@ -116,7 +87,6 @@ type MockConn struct {
 	Timeout time.Duration
 	ConnID  *ID
 	closed  chan struct{}
-	option  *ConnOption
 }
 
 // NewMockConn creates a new MockConn
@@ -126,7 +96,6 @@ func NewMockConn(readCache int, writeCache int) *MockConn {
 		WriteCh: make(chan *Message, writeCache),
 		ConnID:  NewIDGenerator().Generate(),
 		closed:  make(chan struct{}),
-		option:  new(ConnOption),
 	}
 }
 
@@ -183,11 +152,6 @@ func (c *MockConn) Closed() <-chan struct{} {
 // ID returns the identity of the mock connection
 func (c *MockConn) ID() *ID {
 	return c.ConnID
-}
-
-// Option returns option of the channel connection
-func (c *MockConn) Option() *ConnOption {
-	return c.option
 }
 
 func (c *MockConn) String() string {

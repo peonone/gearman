@@ -16,11 +16,11 @@ type workStatusHandler struct {
 	connManager *gearman.ConnManager
 }
 
-func (h *workStatusHandler) SupportPacketTypes() []gearman.PacketType {
+func (h *workStatusHandler) supportPacketTypes() []gearman.PacketType {
 	return wsSupportPacketTypes
 }
 
-func (h *workStatusHandler) Handle(ctx context.Context, m *gearman.Message, conn gearman.Conn) (bool, error) {
+func (h *workStatusHandler) handle(ctx context.Context, m *gearman.Message, conn *conn) (bool, error) {
 	handle, err := gearman.UnmarshalID(m.Arguments[0])
 	if err != nil {
 		return false, err

@@ -11,13 +11,13 @@ type getStatusHandler struct {
 	jobsManager jobsManager
 }
 
-func (h *getStatusHandler) SupportPacketTypes() []gearman.PacketType {
+func (h *getStatusHandler) supportPacketTypes() []gearman.PacketType {
 	return []gearman.PacketType{
 		gearman.GET_STATUS, gearman.GET_STATUS_UNIQUE,
 	}
 }
 
-func (h *getStatusHandler) Handle(ctx context.Context, m *gearman.Message, conn gearman.Conn) (bool, error) {
+func (h *getStatusHandler) handle(ctx context.Context, m *gearman.Message, conn *conn) (bool, error) {
 	var handle *gearman.ID
 	var uniqueID string
 	var err error

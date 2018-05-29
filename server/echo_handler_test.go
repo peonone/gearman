@@ -16,9 +16,9 @@ func TestEchoHandler(t *testing.T) {
 		PacketType: gearman.ECHO_REQ,
 		Arguments:  []string{"hello"},
 	}
-	conn := gearman.NewMockConn(2, 2)
+	conn := newMockSConn(10, 10)
 	ctx := context.Background()
-	msgRecyclable, err := h.Handle(ctx, msg, conn)
+	msgRecyclable, err := h.handle(ctx, msg, conn.srvConn)
 	assert.True(t, msgRecyclable)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(conn.WriteCh))

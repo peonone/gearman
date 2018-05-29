@@ -9,27 +9,28 @@ import (
 )
 
 type resetAbilitiesHandler struct {
-	supportFunctionsManager *supportFunctionsManager
 }
 
-func (h *resetAbilitiesHandler) SupportPacketTypes() []gearman.PacketType {
+func (h *resetAbilitiesHandler) supportPacketTypes() []gearman.PacketType {
 	return []gearman.PacketType{
 		gearman.RESET_ABILITIES,
 	}
 }
 
-func (h *resetAbilitiesHandler) Handle(ctx context.Context, m *gearman.Message, conn gearman.Conn) (bool, error) {
+func (h *resetAbilitiesHandler) handle(ctx context.Context, m *gearman.Message, conn *conn) (bool, error) {
 	switch m.PacketType {
 	case gearman.CAN_DO:
-		h.supportFunctionsManager.canDo(conn.ID(), m.Arguments[0], 0)
+		conn.supportFunctions.canDo(m.Arguments[0], 0)
 	case gearman.CAN_DO_TIMEOUT:
 		timeoutMili, err := strconv.Atoi(m.Arguments[1])
 		if err != nil {
 			return true, err
 		}
-		h.supportFunctionsManager.canDo(conn.ID(), m.Arguments[0], time.Duration(timeoutMili)*time.Millisecond)
+		conn.supportFunctions.canDo(m.Arguments[0], time.Duration(timeoutMili)*time.Millisecond)
 	case gearman.CANT_DO:
-		h.supportFunctionsManager.cantDo(conn.ID(), m.Arguments[0])
+		conn.supportFunctions.cantDo(m.Arguments[0])
+	case gearman.RESET_ABILITIES:
+		conn.supportFunctions.reset()
 	}
 	return true, nil
 }

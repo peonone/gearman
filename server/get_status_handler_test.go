@@ -21,7 +21,7 @@ type getStatusTestData struct {
 
 func TestGetStatusHandler(t *testing.T) {
 	jobsManager := new(mockJobsManager)
-	conn := gearman.NewMockConn(10, 10)
+	conn := newMockSConn(10, 10)
 
 	handler := &getStatusHandler{jobsManager}
 
@@ -63,7 +63,7 @@ func TestGetStatusHandler(t *testing.T) {
 			Arguments:  []string{id},
 		}
 
-		handler.Handle(ctx, msg, conn)
+		handler.handle(ctx, msg, conn.srvConn)
 		assert.Equal(t, 1, len(conn.WriteCh))
 		sentMsg := <-conn.WriteCh
 		assert.Equal(t, gearman.MagicRes, sentMsg.MagicType)
@@ -99,7 +99,7 @@ func TestGetStatusHandler(t *testing.T) {
 		PacketType: gearman.GET_STATUS_UNIQUE,
 		Arguments:  []string{notExistsUniqueID},
 	}
-	handler.Handle(ctx, msg, conn)
+	handler.handle(ctx, msg, conn.srvConn)
 	assert.Equal(t, 1, len(conn.WriteCh))
 	sentMsg := <-conn.WriteCh
 	assert.Equal(t, gearman.MagicRes, sentMsg.MagicType)

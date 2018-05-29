@@ -14,18 +14,17 @@ var noJobMsg = &gearman.Message{
 }
 
 type grabJobHandler struct {
-	sfManager   *supportFunctionsManager
 	jobsManager jobsManager
 }
 
-func (h *grabJobHandler) SupportPacketTypes() []gearman.PacketType {
+func (h *grabJobHandler) supportPacketTypes() []gearman.PacketType {
 	return []gearman.PacketType{
 		gearman.GRAB_JOB, gearman.GRAB_JOB_ALL,
 	}
 }
 
-func (h *grabJobHandler) Handle(ctx context.Context, m *gearman.Message, conn gearman.Conn) (bool, error) {
-	functions := h.sfManager.supportFunctions(conn.ID())
+func (h *grabJobHandler) handle(ctx context.Context, m *gearman.Message, conn *conn) (bool, error) {
+	functions := conn.supportFunctions
 	if len(functions) == 0 {
 		return true, conn.WriteMsg(noJobMsg)
 	}

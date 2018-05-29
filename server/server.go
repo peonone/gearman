@@ -15,36 +15,34 @@ var errUnknownQueueType = errors.New("Unknown queue type")
 
 // Server represents a gearman server instance
 type Server struct {
-	cfg                     *Config
-	logger                  *log.Logger
-	queue                   queue
-	jobHandleGenerator      *gearman.IDGenerator
-	clientIDGenerator       *gearman.IDGenerator
-	logf                    *os.File
-	handlersMng             *gearman.MessageHandlerManager
-	supportFunctionsManager *supportFunctionsManager
-	jobsManager             jobsManager
-	connManager             *gearman.ConnManager
-	sleepManager            *sleepManager
+	cfg                *Config
+	logger             *log.Logger
+	queue              queue
+	jobHandleGenerator *gearman.IDGenerator
+	clientIDGenerator  *gearman.IDGenerator
+	logf               *os.File
+	handlersMng        *serverMessageHandlerManager
+	jobsManager        jobsManager
+	connManager        *gearman.ConnManager
+	sleepManager       *sleepManager
 }
 
 func (s *Server) initHandlerManager() {
-	s.handlersMng = gearman.NewHandlerManager(gearman.RoleServer, s.cfg.RequestTimeout)
+	s.handlersMng = newServerHandlerManager(s.cfg.RequestTimeout)
 	echoHandler := &echoHandler{}
 	submitJobHandler := &submitJobHandler{
 		s.jobHandleGenerator,
 		s.sleepManager,
-		s.supportFunctionsManager,
 		s.jobsManager,
 		s.connManager,
 	}
-	canDoHandler := &canDoHandler{s.supportFunctionsManager}
-	grabJobHandler := &grabJobHandler{s.supportFunctionsManager, s.jobsManager}
+	canDoHandler := &canDoHandler{}
+	grabJobHandler := &grabJobHandler{s.jobsManager}
 	workStatusHandler := &workStatusHandler{s.jobsManager, s.connManager}
 	sleepHandler := &sleepHandler{s.sleepManager}
 	optionHandler := &optionHandler{}
 
-	handlers := []gearman.MessageHandler{
+	handlers := []serverMessageHandler{
 		echoHandler,
 		submitJobHandler,
 		canDoHandler,
@@ -54,10 +52,10 @@ func (s *Server) initHandlerManager() {
 		optionHandler,
 	}
 
-	registeredTypes := make(map[gearman.PacketType]gearman.MessageHandler)
+	registeredTypes := make(map[gearman.PacketType]serverMessageHandler)
 	for _, h := range handlers {
-		for _, pType := range h.SupportPacketTypes() {
-			s.handlersMng.RegisterHandler(pType, h)
+		for _, pType := range h.supportPacketTypes() {
+			s.handlersMng.registerHandler(pType, h)
 			existingH, ok := registeredTypes[pType]
 			if ok && existingH != h {
 				s.logger.Printf("warn: registering packet duplicately: %s: %s and %s",
@@ -93,16 +91,15 @@ func NewServer(cfg *Config) (*Server, error) {
 
 	connManager := gearman.NewConnManager()
 	s := &Server{
-		cfg:                     cfg,
-		logger:                  logger,
-		logf:                    f,
-		queue:                   queue,
-		jobHandleGenerator:      gearman.NewIDGenerator(),
-		clientIDGenerator:       gearman.NewIDGenerator(),
-		supportFunctionsManager: newSupportFunctionsManager(),
-		jobsManager:             newjobsManager(logger, queue, cfg),
-		connManager:             connManager,
-		sleepManager:            newSleepManager(),
+		cfg:                cfg,
+		logger:             logger,
+		logf:               f,
+		queue:              queue,
+		jobHandleGenerator: gearman.NewIDGenerator(),
+		clientIDGenerator:  gearman.NewIDGenerator(),
+		jobsManager:        newjobsManager(logger, queue, cfg),
+		connManager:        connManager,
+		sleepManager:       newSleepManager(),
 	}
 	s.initHandlerManager()
 	return s, nil
@@ -128,12 +125,12 @@ func (s *Server) Run() error {
 		if err != nil {
 			return err
 		}
-		conn := gearman.NewNetConn(netConn, s.clientIDGenerator.Generate())
+		conn := newServerConn(gearman.NewNetConn(netConn, s.clientIDGenerator.Generate()))
 		go s.serve(conn)
 	}
 }
 
-func (s *Server) serve(conn gearman.Conn) {
+func (s *Server) serve(conn *conn) {
 	defer func() {
 		s.connManager.RemoveConn(conn.ID())
 		conn.Close()
@@ -153,7 +150,7 @@ func (s *Server) serve(conn gearman.Conn) {
 			s.logger.Printf("read packet failed from %s: %s", conn, err)
 			continue
 		}
-		_, err = s.handlersMng.HandleMessage(msg, conn)
+		_, err = s.handlersMng.handleMessage(msg, conn)
 		if err != nil {
 			s.logger.Printf("failed to process message %s for %s: %s", msg, conn, err)
 			if serverErr, ok := err.(*serverError); ok {

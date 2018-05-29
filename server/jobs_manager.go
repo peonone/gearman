@@ -25,7 +25,7 @@ type jobStatus struct {
 }
 
 type jobsManager interface {
-	submitJob(ctx context.Context, j *job, clientConn gearman.Conn) (*gearman.ID, error)
+	submitJob(ctx context.Context, j *job, clientConn *conn) (*gearman.ID, error)
 	grabJob(ctx context.Context, functions supportFunctions) (*job, error)
 	getJobStatus(ctx context.Context, handle *gearman.ID, uniqueID string) *jobStatus
 	updateJobStatus(ctx context.Context, handle *gearman.ID, msg *gearman.Message) bool
@@ -59,7 +59,7 @@ func newjobsManager(logger *log.Logger, q queue, cfg *Config) *srvJobsManager {
 	}
 }
 
-func (m *srvJobsManager) submitJob(ctx context.Context, j *job, clientConn gearman.Conn) (*gearman.ID, error) {
+func (m *srvJobsManager) submitJob(ctx context.Context, j *job, clientConn *conn) (*gearman.ID, error) {
 	m.mu.Lock()
 	pJob, hitByUniq := m.pendingJobsUnique[j.uniqueID]
 	dispatched := hitByUniq && pJob.dispatched
@@ -80,7 +80,7 @@ func (m *srvJobsManager) submitJob(ctx context.Context, j *job, clientConn gearm
 		pJob = &pendingJob{
 			handle:      j.handle,
 			uniqueID:    j.uniqueID,
-			clientConns: make(map[gearman.ID]gearman.Conn),
+			clientConns: make(map[gearman.ID]*conn),
 			logger:      m.logger,
 			cfg:         m.cfg,
 		}
@@ -118,7 +118,7 @@ func (m *srvJobsManager) grabJob(ctx context.Context, functions supportFunctions
 	pj.newConnChan = make(chan *newConnReq)
 	pj.statusUpdateChan = make(chan *statusUpdateReq)
 	pj.statusQueryChan = make(chan chan *jobStatus)
-	pj.connectionsQueryChan = make(chan chan map[gearman.ID]gearman.Conn)
+	pj.connectionsQueryChan = make(chan chan map[gearman.ID]*conn)
 	pj.done = make(chan struct{})
 
 	for id, conn := range pj.clientConns {
@@ -229,7 +229,7 @@ type mockJobsManager struct {
 	mock.Mock
 }
 
-func (m *mockJobsManager) submitJob(ctx context.Context, j *job, clientConn gearman.Conn) (*gearman.ID, error) {
+func (m *mockJobsManager) submitJob(ctx context.Context, j *job, clientConn *conn) (*gearman.ID, error) {
 	returnVals := m.Called(ctx, j, clientConn)
 	var handle *gearman.ID
 	if returnVals.Get(0) != "by-param" {
