@@ -24,10 +24,10 @@ func (h *optionHandler) handle(ctx context.Context, m *gearman.Message, conn *co
 		conn.setForwardException(true)
 		optionsSet = exceptionsOption
 	}
-	msg := &gearman.Message{
-		MagicType:  gearman.MagicRes,
-		PacketType: gearman.OPTION_RES,
-		Arguments:  []string{optionsSet},
-	}
+	msg := gearman.MsgPool.Get()
+	defer gearman.MsgPool.Put(msg)
+	msg.MagicType = gearman.MagicRes
+	msg.PacketType = gearman.OPTION_RES
+	msg.Arguments = []string{optionsSet}
 	return true, conn.WriteMsg(msg)
 }

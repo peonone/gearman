@@ -27,7 +27,7 @@ func TestHandler(t *testing.T) {
 	}
 
 	submitHandler.On("handle", mock.Anything, submitMsg, conn.srvConn).Return(true, nil)
-	_, err := mng.handleMessage(submitMsg, conn.srvConn)
+	err := mng.handleMessage(submitMsg, conn.srvConn)
 	assert.Nil(t, err)
 
 	submitBgMsg := &gearman.Message{
@@ -36,7 +36,7 @@ func TestHandler(t *testing.T) {
 		Arguments:  []string{"echo", "123", "hello world"},
 	}
 	submitHandler.On("handle", mock.Anything, submitBgMsg, conn.srvConn).Return(true, nil)
-	_, err = mng.handleMessage(submitBgMsg, conn.srvConn)
+	err = mng.handleMessage(submitBgMsg, conn.srvConn)
 	assert.Nil(t, err)
 
 	workCompleteMsg := &gearman.Message{
@@ -46,7 +46,7 @@ func TestHandler(t *testing.T) {
 	}
 	workCompleteErr := errors.New("hihi")
 	workCompleteHandler.On("handle", mock.Anything, workCompleteMsg, conn.srvConn).Return(true, workCompleteErr)
-	_, err = mng.handleMessage(workCompleteMsg, conn.srvConn)
+	err = mng.handleMessage(workCompleteMsg, conn.srvConn)
 	assert.Equal(t, workCompleteErr, err)
 
 	submitHandler.AssertExpectations(t)

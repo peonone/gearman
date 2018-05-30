@@ -71,6 +71,7 @@ func (j *pendingJob) sendToListenClients(msg *gearman.Message) error {
 }
 
 func (j *pendingJob) handleStatusUpdate(req *statusUpdateReq) bool {
+	defer gearman.MsgPool.Put(req.msg)
 	completed := false
 	switch req.msg.PacketType {
 	case gearman.WORK_COMPLETE, gearman.WORK_FAIL, gearman.WORK_EXCEPTION:
@@ -210,12 +211,12 @@ LOOP:
 			}
 			j.timeouted = true
 			if len(j.clientConns) > 0 {
-				msg := &gearman.Message{
-					MagicType:  gearman.MagicRes,
-					PacketType: gearman.WORK_EXCEPTION,
-					Arguments:  []string{j.handle.String(), jobTimeoutErrMsg},
-				}
+				msg := gearman.MsgPool.Get()
+				msg.MagicType = gearman.MagicRes
+				msg.PacketType = gearman.WORK_EXCEPTION
+				msg.Arguments = []string{j.handle.String(), jobTimeoutErrMsg}
 				j.sendToListenClients(msg)
+				gearman.MsgPool.Put(msg)
 			}
 			break LOOP
 		case selectIdxNewConn:

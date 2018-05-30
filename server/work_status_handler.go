@@ -23,7 +23,7 @@ func (h *workStatusHandler) supportPacketTypes() []gearman.PacketType {
 func (h *workStatusHandler) handle(ctx context.Context, m *gearman.Message, conn *conn) (bool, error) {
 	handle, err := gearman.UnmarshalID(m.Arguments[0])
 	if err != nil {
-		return false, err
+		return true, err
 	}
 	h.jobsManager.updateJobStatus(ctx, handle, m)
 	return false, nil

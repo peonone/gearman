@@ -60,10 +60,10 @@ func (h *getStatusHandler) handle(ctx context.Context, m *gearman.Message, conn 
 	if m.PacketType == gearman.GET_STATUS_UNIQUE {
 		args[5] = waitingCntStr
 	}
-	msg := &gearman.Message{
-		MagicType:  gearman.MagicRes,
-		PacketType: packet,
-		Arguments:  args,
-	}
+	msg := gearman.MsgPool.Get()
+	defer gearman.MsgPool.Put(msg)
+	msg.MagicType = gearman.MagicRes
+	msg.PacketType = packet
+	msg.Arguments = args
 	return true, conn.WriteMsg(msg)
 }

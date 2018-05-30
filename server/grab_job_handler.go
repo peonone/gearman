@@ -40,11 +40,11 @@ func (h *grabJobHandler) handle(ctx context.Context, m *gearman.Message, conn *c
 			packet = gearman.JOB_ASSIGN_ALL
 			args = []string{j.handle.String(), j.function, j.uniqueID, j.reducer, j.data}
 		}
-		msg := &gearman.Message{
-			MagicType:  gearman.MagicRes,
-			PacketType: packet,
-			Arguments:  args,
-		}
+		msg := gearman.MsgPool.Get()
+		defer gearman.MsgPool.Put(msg)
+		msg.MagicType = gearman.MagicRes
+		msg.PacketType = packet
+		msg.Arguments = args
 		return true, conn.WriteMsg(msg)
 	} else if err != nil {
 		return true, &serverError{"job_manager", err}

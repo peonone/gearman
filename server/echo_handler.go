@@ -16,10 +16,10 @@ func (h *echoHandler) supportPacketTypes() []gearman.PacketType {
 }
 
 func (h *echoHandler) handle(ctx context.Context, m *gearman.Message, conn *conn) (bool, error) {
-	msg := &gearman.Message{
-		MagicType:  gearman.MagicRes,
-		PacketType: gearman.ECHO_RES,
-		Arguments:  m.Arguments,
-	}
+	msg := gearman.MsgPool.Get()
+	defer gearman.MsgPool.Put(msg)
+	msg.MagicType = gearman.MagicRes
+	msg.PacketType = gearman.ECHO_RES
+	msg.Arguments = m.Arguments
 	return true, conn.WriteMsg(msg)
 }

@@ -37,6 +37,11 @@ var (
 	errArgumentsTooLong = errors.New("Arguments too long")
 )
 
+var (
+	MsgPool       = NewMessagePool()
+	MsgHeaderPool = NewMessageHeaderPool()
+)
+
 // byte order of the encoding
 var byteOrder binary.ByteOrder = binary.BigEndian
 
@@ -139,7 +144,9 @@ func NextMessage(reader *bufio.Reader) (binMsg *Message, txtMsg string, err erro
 		}
 		return nil, string([]byte{beginByte}) + content, err
 	}
-	headers := make([]byte, headerSize)
+
+	headers := MsgHeaderPool.Get()
+	defer MsgHeaderPool.Put(headers)
 	headers[0] = beginByte
 	_, err = io.ReadFull(reader, headers[1:])
 	if err != nil {
@@ -197,12 +204,11 @@ func NextMessage(reader *bufio.Reader) (binMsg *Message, txtMsg string, err erro
 		return nil, "", errInvalidArgsSize
 	}
 
-	// TODO re-use Message struct to prevent allocate mem every time
-	return &Message{
-		MagicType:  magicType,
-		PacketType: packetType,
-		Arguments:  arguments,
-	}, "", nil
+	msg := MsgPool.Get()
+	msg.MagicType = magicType
+	msg.PacketType = packetType
+	msg.Arguments = arguments
+	return msg, "", nil
 }
 
 func (m *Message) String() string {

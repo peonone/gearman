@@ -155,7 +155,7 @@ func (s *Server) serve(conn *conn) {
 			continue
 		}
 		if msg != nil {
-			_, err = s.handlersMng.handleMessage(msg, conn)
+			err = s.handlersMng.handleMessage(msg, conn)
 			if err != nil {
 				s.logger.Printf("failed to process message %s for %s: %s", msg, conn, err)
 				if serverErr, ok := err.(*serverError); ok {

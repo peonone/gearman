@@ -213,7 +213,10 @@ func BenchmarkDecode(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, err := NextMessage(reader)
+		msg, _, err := NextMessage(reader)
+		if msg != nil {
+			MsgPool.Put(msg)
+		}
 		if err != nil {
 			b.Fail()
 		}

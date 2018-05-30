@@ -403,6 +403,7 @@ func TestJobStatus(t *testing.T) {
 		PacketType: gearman.WORK_STATUS,
 		Arguments:  []string{j.handle.String(), "10", "100"},
 	}
+	msgCopy := *msg
 	assert.True(t, manager.updateJobStatus(ctx, j.handle, msg))
 	time.Sleep(time.Millisecond * 50)
 	js = manager.getJobStatus(ctx, j.handle, "")
@@ -413,14 +414,15 @@ func TestJobStatus(t *testing.T) {
 	assert.Equal(t, 100, js.denominator)
 	assert.Equal(t, 1, len(client1.WriteCh))
 	receivedMsg := <-client1.WriteCh
-	assert.Equal(t, msg.PacketType, receivedMsg.PacketType)
-	assert.Equal(t, msg.Arguments, receivedMsg.Arguments)
+	assert.Equal(t, msgCopy.PacketType, receivedMsg.PacketType)
+	assert.Equal(t, msgCopy.Arguments, receivedMsg.Arguments)
 	for _, packet := range []gearman.PacketType{gearman.WORK_DATA, gearman.WORK_WARNING} {
 		msg = &gearman.Message{
 			MagicType:  gearman.MagicReq,
 			PacketType: packet,
 			Arguments:  []string{j.handle.String(), "12345"},
 		}
+		msgCopy := *msg
 		assert.True(t, manager.updateJobStatus(ctx, j.handle, msg))
 		js = manager.getJobStatus(ctx, nil, j.uniqueID)
 		time.Sleep(time.Millisecond * 5)
@@ -429,8 +431,8 @@ func TestJobStatus(t *testing.T) {
 		assert.True(t, js.running)
 		assert.Equal(t, 1, len(client1.WriteCh))
 		receivedMsg = <-client1.WriteCh
-		assert.Equal(t, msg.PacketType, receivedMsg.PacketType)
-		assert.Equal(t, msg.Arguments, receivedMsg.Arguments)
+		assert.Equal(t, msgCopy.PacketType, receivedMsg.PacketType)
+		assert.Equal(t, msgCopy.Arguments, receivedMsg.Arguments)
 	}
 
 	client2.Close()

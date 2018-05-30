@@ -127,7 +127,9 @@ func (c *MockConn) ReadMsg() (*Message, string, error) {
 
 // WriteMsg writes a Message to the channel
 func (c *MockConn) WriteMsg(m *Message) error {
-	c.WriteCh <- m
+	// copy the Message struct as we will the original one to the pool for re-use
+	msgCopy := *m
+	c.WriteCh <- &msgCopy
 	return nil
 }
 

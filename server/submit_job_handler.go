@@ -74,10 +74,11 @@ func (h *submitJobHandler) handle(ctx context.Context, m *gearman.Message, con *
 		}
 		workerConnSrv := workerConn.(*conn)
 		if workerConnSrv.supportFunctions.support(j.function) {
-			msg := &gearman.Message{
-				MagicType:  gearman.MagicRes,
-				PacketType: gearman.NOOP,
-			}
+			msg := gearman.MsgPool.Get()
+			defer gearman.MsgPool.Put(msg)
+			msg.MagicType = gearman.MagicRes
+			msg.PacketType = gearman.NOOP
+			msg.Arguments = nil
 			workerConn.WriteMsg(msg)
 			break
 		}
