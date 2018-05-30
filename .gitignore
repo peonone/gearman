@@ -5,3 +5,5 @@ gearmand.dat
 server/unittest.db
 /vendor
 /Gopkg.lock
+*.prof
+*.test
