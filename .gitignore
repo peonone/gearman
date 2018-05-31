@@ -1,6 +1,6 @@
 *.log
 *.swp
-gearmand
+/gearmand
 gearmand.dat
 server/unittest.db
 /vendor
