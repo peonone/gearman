@@ -134,6 +134,43 @@ func (s *Server) Run() error {
 	}
 }
 
+func (s *Server) handleRequest(conn *conn) bool {
+	msg, txtMsg, err := conn.ReadMsg()
+	if err == io.EOF || err == io.ErrUnexpectedEOF {
+		if s.cfg.Verbose {
+			s.logger.Printf("client closed: %s", conn)
+		}
+		return true
+	} else if err != nil {
+		s.logger.Printf("read packet failed from %s: %s", conn, err)
+		return false
+	}
+	if msg != nil {
+		recyclable, err := s.handlersMng.handleMessage(msg, conn)
+		defer func() {
+			if recyclable {
+				gearman.MsgPool.Put(msg)
+			}
+		}()
+		if err != nil {
+			s.logger.Printf("failed to process message %s for %s: %s", msg, conn, err)
+			if serverErr, ok := err.(*serverError); ok {
+				errMsg := gearman.MsgPool.Get()
+				errMsg.MagicType = gearman.MagicRes
+				errMsg.PacketType = gearman.ERROR
+				errMsg.Arguments = serverErr.toArguments()
+				conn.WriteMsg(errMsg)
+				gearman.MsgPool.Put(errMsg)
+			}
+		} else if s.cfg.Verbose {
+			s.logger.Printf("processed message %s for %s", msg, conn)
+		}
+	} else if txtMsg != "" {
+		s.admin.handle(txtMsg, conn)
+	}
+	return false
+}
+
 func (s *Server) serve(conn *conn) {
 	defer func() {
 		s.connManager.RemoveConn(conn.ID())
@@ -144,33 +181,8 @@ func (s *Server) serve(conn *conn) {
 	}
 	s.connManager.AddConn(conn)
 	for {
-		msg, txtMsg, err := conn.ReadMsg()
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
-			if s.cfg.Verbose {
-				s.logger.Printf("client closed: %s", conn)
-			}
+		if s.handleRequest(conn) {
 			break
-		} else if err != nil {
-			s.logger.Printf("read packet failed from %s: %s", conn, err)
-			continue
-		}
-		if msg != nil {
-			err = s.handlersMng.handleMessage(msg, conn)
-			if err != nil {
-				s.logger.Printf("failed to process message %s for %s: %s", msg, conn, err)
-				if serverErr, ok := err.(*serverError); ok {
-					errMsg := &gearman.Message{
-						MagicType:  gearman.MagicRes,
-						PacketType: gearman.ERROR,
-						Arguments:  serverErr.toArguments(),
-					}
-					conn.WriteMsg(errMsg)
-				}
-			} else if s.cfg.Verbose {
-				s.logger.Printf("processed message %s for %s", msg, conn)
-			}
-		} else if txtMsg != "" {
-			s.admin.handle(txtMsg, conn)
 		}
 	}
 }

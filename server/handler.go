@@ -44,29 +44,22 @@ func (m *serverMessageHandlerManager) registerHandler(packetType gearman.PacketT
 // handleMessage process one message for the connection
 // first it checks the validity of the message and return the error if fails
 // then it dispatch to the approciate handler to process the message
-func (m *serverMessageHandlerManager) handleMessage(msg *gearman.Message, conn *conn) error {
-	recycable := true
-	defer func() {
-		if recycable {
-			gearman.MsgPool.Put(msg)
-		}
-	}()
+func (m *serverMessageHandlerManager) handleMessage(msg *gearman.Message, conn *conn) (bool, error) {
 	err := msg.Validate(gearman.RoleServer)
 	if err != nil {
-		return err
+		return true, err
 	}
 	m.mu.Lock()
 	handler, ok := m.handlers[msg.PacketType]
 	m.mu.Unlock()
 	if !ok {
-		return errInvaldPacketType
+		return true, errInvaldPacketType
 	}
 	ctx := context.Background()
 	if m.reqTimeout > 0 {
 		ctx, _ = context.WithTimeout(ctx, m.reqTimeout)
 	}
-	recycable, err = handler.handle(ctx, msg, conn)
-	return err
+	return handler.handle(ctx, msg, conn)
 }
 
 // MockHandler is an implementation for unit test
