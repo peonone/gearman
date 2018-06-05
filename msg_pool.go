@@ -43,18 +43,18 @@ func NewMessageHeaderPool() *MessageHeaderPool {
 	return &MessageHeaderPool{
 		pool: &sync.Pool{
 			New: func() interface{} {
-				return make([]byte, headerSize)
+				return new([headerSize]byte)
 			},
 		},
 	}
 }
 
 // Get returns a free Message header slice from the pool or creates a new one if the pool is empty
-func (p *MessageHeaderPool) Get() []byte {
-	return p.pool.Get().([]byte)
+func (p *MessageHeaderPool) Get() *[headerSize]byte {
+	return p.pool.Get().(*[headerSize]byte)
 }
 
 // Put puts a free Message header slice back to the pool
-func (p *MessageHeaderPool) Put(header []byte) {
+func (p *MessageHeaderPool) Put(header *[headerSize]byte) {
 	p.pool.Put(header)
 }
