@@ -7,6 +7,8 @@ before_script:
     - cd $GOPATH/src/github.com/$CI_PROJECT_NAMESPACE
     - ln -s $CI_PROJECT_DIR 
     - cd $CI_PROJECT_NAME
+    - go get -u github.com/golang/dep/...
+    - dep ensure
 
 test:
   stage: test
