@@ -1,0 +1,21 @@
+stages:
+  - test
+  - build
+
+before_script:
+    - mkdir -p $GOPATH/src/github.com/$CI_PROJECT_NAMESPACE
+    - cd $GOPATH/src/github.com/$CI_PROJECT_NAMESPACE
+    - ln -s $CI_PROJECT_DIR 
+    - cd $CI_PROJECT_NAME
+
+test:
+  stage: test
+  image: golang:1.10.2
+  script:
+    - go test -race -v -cover ./...
+
+build:
+  stage: build
+  image: golang:1.10.2
+  script:
+    - go build server/gearmand/gearmand.go
