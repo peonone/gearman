@@ -8,8 +8,11 @@ An execuable app which implements a subset of the [gearman protocol](http://gear
 - SUBMIT_JOB_EPOCH (no plan to add)
 ### Administrative Protocol
 ## Usage
-
-    go get github.com/peonone/gearman
+    git clone git@gitlab.com:peonone/gearman.git
+    cd gearman
+    go get -u github.com/golang/dep/...
+    dep ensure
+    go install ./server/gearmand/
     $GOPATH/bin/gearmand
 ### command line options
 
